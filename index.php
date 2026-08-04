@@ -2,6 +2,9 @@
 require_once 'includes/funciones.php';
 require_once 'includes/db.php';
 
+$plcCod = isset($_GET['PlcCod']) ? (int)$_GET['PlcCod'] : (isset($_GET['plccod']) ? (int)$_GET['plccod'] : 0);
+$usrCod = isset($_GET['UsrCod']) ? trim($_GET['UsrCod']) : (isset($_GET['usrcod']) ? trim($_GET['usrcod']) : '');
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['subir_pdf'])) {
     $carpeta = trim($_POST['pdf_carpeta']);
     $archivo = $_FILES['pdf_archivo'] ?? null;
@@ -15,26 +18,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['subir_pdf'])) {
             if (is_dir($dir)) $ok = move_uploaded_file($archivo['tmp_name'], $destino);
         }
     }
-    header('Location: index.php?upload=' . ($ok ? 'ok' : 'error') . (isset($_GET['PlcCod']) ? '&PlcCod=' . $_GET['PlcCod'] : '') . (isset($_GET['UsrCod']) ? '&UsrCod=' . urlencode($_GET['UsrCod']) : ''));
+    $redirectPlc = $plcCod ? '&PlcCod=' . $plcCod : '';
+    $redirectUsr = $usrCod !== '' ? '&UsrCod=' . urlencode($usrCod) : '';
+    header('Location: index.php?upload=' . ($ok ? 'ok' : 'error') . $redirectPlc . $redirectUsr);
     exit;
 }
-
-$plcCod = isset($_GET['PlcCod']) ? (int)$_GET['PlcCod'] : 0;
-$usrCod = isset($_GET['UsrCod']) ? trim($_GET['UsrCod']) : '';
 $error = '';
 $cirugia = null;
+
+
 
 if ($plcCod <= 0) {
     $error = 'Error: No se especificó el código de planilla (PlcCod).';
 } else {
     try {
         $stmt = $pdo->prepare('
-            SELECT p.PlcCod, p.PlcFec, p.PlcPac, p.PlcMed, p.Plhcod,
+            SELECT p.PlcCod, p.PlcFec, p.PlcPac, p.PlcMed, p.PlcSer,
                    m.mediconombre,
                    h.HospDesc
             FROM planillacirugia p
             LEFT JOIN medicos m ON p.PlcMed = m.cod_medico
-            LEFT JOIN hospitales h ON p.Plhcod = h.HospCod
+            LEFT JOIN hospitales h ON p.PlcSer = h.HospCod
             WHERE p.PlcCod = ?
         ');
         $stmt->execute([$plcCod]);
@@ -78,7 +82,7 @@ if (isset($_GET['upload'])) {
         <img class="logo" src="LOGO/logo_bioimplant.png" alt="Logo BIOPROT">
     </div>
 
-      <!-- ===== FORMULARIO SUBIR PDF (separado) ===== -->
+    <!-- ===== FORMULARIO SUBIR PDF (separado) ===== -->
 
     <h2 class="section-title">Agregar PDF</h2>
     <form action="index.php" method="post" enctype="multipart/form-data" style="margin-top:10px;">
@@ -102,63 +106,44 @@ if (isset($_GET['upload'])) {
         </div>
     </form>
 
-    <form id="form-remito">
+    <form id="form-remito" action="controlar.php" method="post">
 
-        <input type="hidden" id="plc-cod" value="<?= $plcCod ?>">
-        <input type="hidden" id="usr-cod" value="<?= htmlspecialchars($usrCod) ?>">
+        <input type="hidden" name="plc_cod" value="<?= $plcCod ?>">
+        <input type="hidden" name="usr_cod" value="<?= htmlspecialchars($usrCod) ?>">
 
         <h2 class="section-title">Datos de la cirugía</h2>
         <div class="campos-form">
             <div class="campo">
                 <label for="institucion">INSTITUCION:</label>
-                <input type="text" id="institucion" value="<?= htmlspecialchars($cirugia['HospDesc'] ?? '') ?>">
+                <input type="text" id="institucion" name="institucion" value="<?= htmlspecialchars($cirugia['HospDesc'] ?? '') ?>">
             </div>
             <div class="campo">
                 <label for="fecha">FECHA:</label>
-                <input type="date" id="fecha" value="<?= htmlspecialchars($cirugia['PlcFec'] ?? '') ?>">
+                <input type="date" id="fecha" name="fecha" value="<?= htmlspecialchars($cirugia['PlcFec'] ?? '') ?>">
             </div>
             <div class="campo">
                 <label for="doctor">DOCTOR:</label>
-                <input type="text" id="doctor" value="<?= htmlspecialchars($cirugia['mediconombre'] ?? '') ?>">
+                <input type="text" id="doctor" name="doctor" value="<?= htmlspecialchars($cirugia['mediconombre'] ?? '') ?>">
             </div>
             <div class="campo">
                 <label for="paciente">PACIENTE:</label>
-                <input type="text" id="paciente" value="<?= htmlspecialchars($cirugia['PlcPac'] ?? '') ?>">
-            </div>
-        </div>
-
-        <h2 class="section-title">Ajustes</h2>
-        <div class="campos-form">
-            <div class="campo">
-                <label for="crop-height">Píxeles a recortar (fallback manual):</label>
-                <input type="number" id="crop-height" value="800" min="0" max="3000" step="50">
-            </div>
-            <div class="campo">
-                <label for="ref-imagen">Patrón de referencia a eliminar (opcional):</label>
-                <input type="file" id="ref-imagen" accept="image/png,image/jpeg">
-                <img id="ref-preview" style="display:none;max-width:200px;max-height:60px;margin-top:6px;border:1px solid #ccc;">
+                <input type="text" id="paciente" name="paciente" value="<?= htmlspecialchars($cirugia['PlcPac'] ?? '') ?>">
             </div>
         </div>
 
         <h2 class="section-title">Seleccionar PDFs para adjuntar</h2>
 
         <div class="pdf-selector">
-            <div style="margin-bottom:8px;font-size:13px;">
-                <label><input type="checkbox" id="seleccionar-todos"> Seleccionar todos</label>
-                <span style="margin-left:15px;">|</span>
-                <input type="text" id="buscar-pdf" placeholder="Buscar PDF..." style="margin-left:10px;padding:4px 8px;border:1px solid #ccc;border-radius:3px;font-size:13px;width:250px;">
-            </div>
             <?php foreach ($categorias as $cat): ?>
             <div class="categoria">
                 <div class="categoria-header">
-                    <span class="toggle-icon">&#9654;</span>
                     <span><?= htmlspecialchars($cat['nombre']) ?></span>
                     <span class="count">(<?= count($cat['pdfs']) ?>)</span>
                 </div>
                 <div class="pdf-lista">
                     <?php foreach ($cat['pdfs'] as $pdf): ?>
                     <div class="pdf-item">
-                        <input type="checkbox" id="pdf-<?= md5($pdf['ruta_web']) ?>" value="<?= htmlspecialchars($pdf['ruta_web']) ?>">
+                        <input type="checkbox" id="pdf-<?= md5($pdf['ruta_web']) ?>" name="pdfs[]" value="<?= htmlspecialchars($pdf['ruta_web']) ?>">
                         <label for="pdf-<?= md5($pdf['ruta_web']) ?>"><?= htmlspecialchars($pdf['nombre']) ?></label>
                     </div>
                     <?php endforeach; ?>
@@ -168,7 +153,7 @@ if (isset($_GET['upload'])) {
         </div>
 
         <div class="acciones no-print">
-            <button type="submit" class="btn btn-primario">Generar Remito</button>
+            <button type="submit" class="btn btn-primario">Controlar Cajas</button>
         </div>
     </form>
 
@@ -180,53 +165,5 @@ if (isset($_GET['upload'])) {
 
 </div>
 
-<!-- ===== VISTA PREVIA ===== -->
-<div id="preview-section" class="contenedor-preview" style="display:none">
-
-    <div class="acciones no-print" style="padding:10px 20px;border-bottom:1px solid #ddd;display:flex;gap:10px;">
-        <button id="volver-form" class="btn btn-secundario">Volver</button>
-        <button id="imprimir-limpio" class="btn btn-primario">Imprimir solo imágenes</button>
-    </div>
-
-    <div class="preview-header">
-        <img class="logo" src="LOGO/logo_bioimplant.png" alt="Logo BIOPROT">
-        <div class="info-empresa">
-            <h1>BIOPROT IMPLANTES DE BIOIMPLANT S.R.L.</h1>
-            <p>C.U.I.T. Nº: 30-70921726-3 &mdash; Montevideo 567 (Rosario) Tel/Fax: 0341 4485178</p>
-            <p>E mail: bioprotimplantes@bioprot.com.ar</p>
-        </div>
-    </div>
-
-    <div class="texto-legal-preview">
-        <strong>Remito en consignación.</strong> CONDICIONES DE LA CONSIGNACIÓN: se remite la siguiente mercadería en carácter de depositario asumiendo todas las emergentes del Art. 2182 del Código Civil, de los artículos siguientes y concordantes, obligándose en consecuencia a la restitución en forma inde los 15 días de la fecha de consignación, caso contrario será facturado de acuerdo a las condiciones habituales estipuladas por la Empresa.
-    </div>
-
-    <div class="datos-remito">
-        <div class="campo-remito"><span class="etiqueta">INSTITUCION:</span><span id="preview-institucion">___________________________</span></div>
-        <div class="campo-remito"><span class="etiqueta">FECHA:</span><span id="preview-fecha">__/__/____</span></div>
-        <div class="campo-remito"><span class="etiqueta">DOCTOR:</span><span id="preview-doctor">___________________________</span></div>
-        <div class="campo-remito"><span class="etiqueta">PACIENTE:</span><span id="preview-paciente">________________________________</span></div>
-    </div>
-
-    <div id="loading" class="loading" style="display:none">
-        <div>Procesando PDFs, por favor espere...</div>
-        <div class="barra-progreso"><div id="barra-progreso" class="progreso"></div></div>
-    </div>
-    <div id="detect-info" style="padding:6px 20px;font-size:12px;color:#666;"></div>
-
-    <div id="contenido-pdf" class="contenido-pdf"></div>
-
-    <div id="instrumental-section" class="instrumental-section" style="display:none;padding:20px;border-top:2px solid #1a3a5c;">
-        <h2 class="section-title">Instrumental de la caja</h2>
-        <div id="instrumental-container"></div>
-        <div class="acciones no-print" style="margin-top:15px;">
-            <button id="guardar-instrumental" class="btn btn-primario">Guardar Instrumental</button>
-        </div>
-    </div>
-
-</div>
-
-<script src="js/pdf.min.js"></script>
-<script src="js/app.js"></script>
 </body>
 </html>

@@ -134,21 +134,10 @@ h2.section-title {
     padding: 6px 8px;
     background: #f0f3f7;
     border-radius: 3px;
-    cursor: pointer;
-    user-select: none;
     font-weight: 600;
     font-size: 14px;
     color: #1a3a5c;
 }
-
-.categoria-header:hover { background: #e2e7ef; }
-
-.categoria-header .toggle-icon {
-    font-size: 11px;
-    transition: transform 0.2s;
-}
-
-.categoria-header .toggle-icon.abierto { transform: rotate(90deg); }
 
 .categoria-header .count {
     font-weight: normal;
@@ -159,10 +148,7 @@ h2.section-title {
 
 .pdf-lista {
     padding-left: 28px;
-    display: none;
 }
-
-.pdf-lista.abierto { display: block; }
 
 .pdf-item {
     display: flex;
@@ -204,6 +190,23 @@ h2.section-title {
 .btn-secundario {
     background: #888;
     color: #fff;
+    text-decoration: none;
+}
+
+.badge {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: 15px;
+    font-weight: bold;
+    color: #fff;
+    background: #1a3a5c;
+    border-radius: 3px;
+    text-decoration: none;
+}
+
+
+.badge-secundario {
+    background: #888;
 }
 
 .btn-secundario:hover { background: #666; }
@@ -305,6 +308,81 @@ h2.section-title {
     transition: width 0.3s;
 }
 
+/* ===== CONTROL DE CAJAS / MOVER ===== */
+.nav-top {
+    display: flex;
+    justify-content: flex-start;
+    margin-bottom: 15px;
+}
+
+.campo select {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+    background: #fff;
+}
+
+.campo select[multiple] {
+    height: 160px;
+    padding: 6px;
+}
+
+.lista-cajas {
+    height: 160px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 6px;
+    background: #fff;
+}
+
+.lista-cajas .caja-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    padding: 3px 2px;
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+.lista-cajas .caja-item:hover { background: #f0f3f7; }
+
+.lista-cajas .caja-item .cnt-chk {
+    color: #888;
+    font-size: 12px;
+    margin-left: auto;
+}
+
+.mensaje-info {
+    padding: 20px;
+    text-align: center;
+    color: #888;
+    background: #fafafa;
+    border: 1px dashed #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.tabla-mover tbody tr:hover {
+    background: #f0f3f7;
+}
+
+.tabla-mover .it-cant {
+    width: 70px;
+    padding: 4px 6px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    text-align: center;
+}
+
+.resultado {
+    margin: 20px 0;
+    font-size: 14px;
+}
+
 /* ===== TABLA INSTRUMENTAL ===== */
 .instrumental-section {
     border-top: 2px solid #1a3a5c;
@@ -362,6 +440,37 @@ h2.section-title {
     cursor: pointer;
     transform: scale(1.2);
 }
+
+.btn-agregar-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 6px 0 15px;
+    padding: 8px 14px;
+    background: #1a3a5c;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .2s;
+}
+.btn-agregar-item:hover { background: #2a4a6c; }
+
+.btn-eliminar-item {
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 4px;
+    background: #e74c3c;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background .2s;
+}
+.btn-eliminar-item:hover { background: #c0392b; }
 
 /* ===== IMPRESIÓN ===== */
 @media print {

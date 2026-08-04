@@ -11,6 +11,9 @@ if (!$data || !isset($data['plc_cod']) || !isset($data['items'])) {
 $plcCod = (int)$data['plc_cod'];
 $usrCod = trim($data['usr_cod'] ?? '');
 $items = $data['items'];
+$hosDesc = trim($data['institucion'] ?? '');
+$med = trim($data['doctor'] ?? '');
+$pac = trim($data['paciente'] ?? '');
 
 if ($plcCod <= 0 || empty($items)) {
     echo json_encode(['ok' => false, 'error' => 'Código inválido o sin items']);
@@ -20,8 +23,8 @@ if ($plcCod <= 0 || empty($items)) {
 try {
     $pdo->beginTransaction();
 
-    $stmt = $pdo->prepare('INSERT INTO notaconsignacion (NcoFec, NcoCac, NcoPlcCod) VALUES (CURDATE(), 262, ?)');
-    $stmt->execute([$plcCod]);
+    $stmt = $pdo->prepare('INSERT INTO notaconsignacion (NcoFec, NcoCac, NcoPlcCod, NcoHosDesc, NcoMed, NcoPac) VALUES (CURDATE(), 262, ?, ?, ?, ?)');
+    $stmt->execute([$plcCod, $hosDesc, $med, $pac]);
     $ncoCod = $pdo->lastInsertId();
 
     $stmtDet = $pdo->prepare('INSERT INTO notaconsignaciondetalle (NcoCod, NcoDetItm, NcoDetCan, NcoDetDsc, NcoDetChk) VALUES (?, ?, ?, ?, ?)');

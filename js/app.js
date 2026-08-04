@@ -85,15 +85,19 @@ document.addEventListener('DOMContentLoaded', function () {
         var usrCod = document.getElementById('usr-cod').value;
 
         try {
+            var institucion = document.getElementById('institucion').value.trim();
+            var doctor = document.getElementById('doctor').value.trim();
+            var paciente = document.getElementById('paciente').value.trim();
             var resp = await fetch('includes/guardar_consignacion.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ plc_cod: plcCod, usr_cod: usrCod, items: items })
+                body: JSON.stringify({ plc_cod: plcCod, usr_cod: usrCod, items: items, institucion: institucion, doctor: doctor, paciente: paciente })
             });
             var result = await resp.json();
             if (result.ok) {
                 btn.textContent = 'Guardado (N° ' + result.nco_cod + ')';
                 btn.style.background = '#28a745';
+                window.open('includes/generar_pdf.php?nco=' + result.nco_cod, '_blank');
             } else {
                 alert('Error: ' + (result.error || 'Desconocido'));
                 btn.textContent = 'Guardar Instrumental';
@@ -240,7 +244,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /* ===== Extraer tabla instrumental del PDF ===== */
-    function groupTextLines(textContent) {
+    function extraerTextoInstrumental(textContent) {
+        var secciones = [], currentSection = null;
         var items = [].slice.call(textContent.items);
         items.sort(function (a, b) {
             var ya = Math.round(a.transform[5]);
@@ -248,85 +253,70 @@ document.addEventListener('DOMContentLoaded', function () {
             if (yb !== ya) return yb - ya;
             return a.transform[4] - b.transform[4];
         });
+
         var lines = [], current = null;
         for (var i = 0; i < items.length; i++) {
+            var str = (items[i].str || '').trim();
+            if (!str) continue;
             var y = Math.round(items[i].transform[5]);
             if (current === null || Math.abs(y - current.y) > 3) {
-                current = { y: y, texts: [] };
+                current = { y: y, parts: [] };
                 lines.push(current);
             }
-            current.texts.push(items[i]);
+            current.parts.push({ x: items[i].transform[4], str: str });
         }
         for (var l = 0; l < lines.length; l++) {
-            lines[l].texts.sort(function (a, b) { return a.transform[4] - b.transform[4]; });
-            lines[l].text = lines[l].texts.map(function (t) { return t.str; }).join(' ').trim();
+            lines[l].parts.sort(function (a, b) { return a.x - b.x; });
+            lines[l].text = lines[l].parts.map(function (t) { return t.str; }).join(' ').trim();
         }
-        return lines;
-    }
 
-    var skipPrefixes = [
-        'BIOPROT IMPLANTES', 'C.U.I.T.', 'Montevideo', 'E mail',
-        'Remito en consignaci', 'CONDICIONES', 'Pagina', 'Página',
-        'INSTITUCION', 'FECHA', 'DOCTOR', 'PACIENTE',
-        'CONTROL DE INGRESO', 'CONTROL DE SALIDA', 'ACONDICIONAMIENTO',
-        'REMITO', 'RECIBIDO POR', 'FIRMA', 'ACLARACION',
-    ];
+        for (var l = 0; l < lines.length; l++) {
+            var line = lines[l].text;
+            if (!line) continue;
 
-    function esLineaOmitir(texto) {
-        var t = texto.toUpperCase();
-        for (var i = 0; i < skipPrefixes.length; i++) {
-            if (t.indexOf(skipPrefixes[i].toUpperCase()) === 0) return true;
-        }
-        return false;
-    }
-
-    async function extraerTablaPDF(pdfUrl) {
-        var task = pdfjsLib.getDocument(pdfUrl);
-        var pdf = await task.promise;
-        var secciones = [], currentSection = null;
-
-        for (var p = 1; p <= pdf.numPages; p++) {
-            var page = await pdf.getPage(p);
-            var textContent = await page.getTextContent();
-            var lines = groupTextLines(textContent);
-
-            for (var l = 0; l < lines.length; l++) {
-                var line = lines[l].text;
-                if (!line) continue;
-                if (esLineaOmitir(line)) continue;
-
-                var itemMatch = line.match(/^(\d+)\s+(.+)/);
-                if (itemMatch) {
-                    if (!currentSection) {
-                        currentSection = { nombre: 'Instrumental', items: [] };
-                        secciones.push(currentSection);
-                    }
-                    currentSection.items.push({
-                        cantidad: parseInt(itemMatch[1], 10),
-                        descripcion: itemMatch[2].trim()
-                    });
-                    continue;
-                }
-
-                if (line.length <= 5) continue;
-                currentSection = { nombre: line, items: [] };
-                secciones.push(currentSection);
+            var skip = false;
+            var up = line.toUpperCase().replace(/^[^A-Z0-9]+/, '');
+            var prefijos = ['BIOPROT', 'C.U.I.T.', 'MONTEVIDEO', 'E MAIL',
+                'REMITO EN CONSIGNACI', 'CONDICIONES', 'EMERGENTES', 'DE LOS',
+                'PAGINA', 'PÁGINA', 'INSTITUCION', 'FECHA', 'DOCTOR', 'PACIENTE',
+                'CONTROL', 'INGRESO', 'SALIDA', 'ACONDICIONAMIENTO',
+                'REMITO', 'RECIBIDO POR', 'FIRMA', 'ACLARACION'];
+            for (var s = 0; s < prefijos.length; s++) {
+                if (up.indexOf(prefijos[s]) === 0) { skip = true; break; }
             }
+            if (skip) continue;
+
+            var itemMatch = line.match(/^(\d+)\s+(.+)/);
+            if (itemMatch) {
+                if (!currentSection) {
+                    currentSection = { nombre: 'Instrumental', items: [] };
+                    secciones.push(currentSection);
+                }
+                currentSection.items.push({
+                    cantidad: parseInt(itemMatch[1], 10),
+                    descripcion: itemMatch[2].trim()
+                });
+                continue;
+            }
+
+            if (line.length <= 5) continue;
+            currentSection = { nombre: line, items: [] };
+            secciones.push(currentSection);
         }
-        return secciones;
+        return secciones.filter(function (s) { return s.items.length > 0; });
     }
 
     function generarTablaEditable(secciones) {
         var h = '<table class="tabla-instrumental">';
         h += '<thead><tr><th style="width:50px">Cant.</th><th>Descripción</th><th style="width:50px">Incluir</th></tr></thead><tbody>';
         for (var s = 0; s < secciones.length; s++) {
-            h += '<tr class="seccion-header"><td colspan="3">' + secciones[s].nombre + '</td></tr>';
+            h += '<tr class="seccion-header"><td colspan="3">' + secciones[s].nombre.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') + '</td></tr>';
             for (var i = 0; i < secciones[s].items.length; i++) {
                 var item = secciones[s].items[i];
                 h += '<tr>';
                 h += '<td><input type="number" value="' + item.cantidad + '" min="0" class="inst-cant"></td>';
                 h += '<td><input type="text" value="' + item.descripcion.replace(/"/g, '&quot;') + '" class="inst-desc"></td>';
-                h += '<td style="text-align:center"><input type="checkbox" checked class="inst-chk"></td>';
+                h += '<td style="text-align:center"><input type="checkbox" class="inst-chk"></td>';
                 h += '</tr>';
             }
         }
@@ -354,11 +344,13 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('preview-doctor').textContent = doctor || '___________________________';
         document.getElementById('preview-paciente').textContent = paciente || '________________________________';
 
+        var mostrarPreview = document.getElementById('mostrar-preview').checked;
         formSection.style.display = 'none';
         previewSection.style.display = 'block';
         loadingEl.style.display = 'block';
         if (infoEl) infoEl.textContent = '';
         progressBar.style.width = '0%';
+        if (!mostrarPreview) contenidoPDF.style.display = 'none';
 
         var totalPages = 0;
         for (var i = 0; i < pdfUrls.length; i++) {
@@ -370,6 +362,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var processed = 0;
         var refOk = 0, blanOk = 0, fallbackOk = 0;
         var firstDebugDone = false;
+        var instrumentalData = null;
 
         for (var i = 0; i < pdfUrls.length; i++) {
             try {
@@ -378,55 +371,82 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 for (var p = 1; p <= pdf.numPages; p++) {
                     var page = await pdf.getPage(p);
-                    var result = await procesarPagina(page, pdfUrls[i], p);
-                    if (result.metodo === 'referencia') refOk++;
-                    else if (result.metodo === 'blancos') blanOk++;
-                    else fallbackOk++;
 
-                    if (result.restH <= 0) { processed++; continue; }
-
-                    if (!firstDebugDone) {
-                        firstDebugDone = true;
-                        var dC = document.createElement('canvas');
-                        dC.width = result.debugCanvas.width;
-                        dC.height = result.debugCanvas.height;
-                        var dctx = dC.getContext('2d');
-                        dctx.drawImage(result.debugCanvas, 0, 0);
-                        dctx.strokeStyle = 'red';
-                        dctx.lineWidth = 3;
-                        dctx.beginPath();
-                        dctx.moveTo(0, result.debugCropY + 0.5);
-                        dctx.lineTo(result.debugCanvas.width, result.debugCropY + 0.5);
-                        dctx.stroke();
-                        dctx.fillStyle = 'rgba(255,0,0,0.15)';
-                        dctx.fillRect(0, 0, result.debugCanvas.width, result.debugCropY);
-                        var dImg = document.createElement('img');
-                        dImg.src = dC.toDataURL('image/png');
-                        dImg.style.cssText = 'display:block;width:100%;height:auto;opacity:0.6;margin-bottom:2px;';
-                        dImg.alt = 'Debug: corte en y=' + result.debugCropY + ' (' + result.metodo + ')';
-                        contenidoPDF.appendChild(dImg);
+                    /* Extraer instrumental del primer PDF (todas sus páginas, fusionadas) */
+                    if (i === 0) {
+                        try {
+                            var tc = await page.getTextContent();
+                            var extracted = extraerTextoInstrumental(tc);
+                            if (instrumentalData === null) instrumentalData = [];
+                            if (extracted && extracted.length > 0) {
+                                for (var e = 0; e < extracted.length; e++) {
+                                    if (extracted[e].items.length === 0) continue;
+                                    var ult = instrumentalData[instrumentalData.length - 1];
+                                    if (ult && ult.nombre === extracted[e].nombre) {
+                                        for (var ie = 0; ie < extracted[e].items.length; ie++) ult.items.push(extracted[e].items[ie]);
+                                    } else {
+                                        instrumentalData.push(extracted[e]);
+                                    }
+                                }
+                            }
+                        } catch (etx) {
+                            console.error('[Instrumental] Error pag ' + p + ':', etx);
+                        }
                     }
 
-                    var img = document.createElement('img');
-                    img.src = result.dataUrl;
-                    img.className = 'pagina-pdf';
-                    contenidoPDF.appendChild(img);
+                    if (mostrarPreview) {
+                        var result = await procesarPagina(page, pdfUrls[i], p);
+                        if (result.metodo === 'referencia') refOk++;
+                        else if (result.metodo === 'blancos') blanOk++;
+                        else fallbackOk++;
+
+                        if (result.restH <= 0) { processed++; continue; }
+
+                        if (!firstDebugDone) {
+                            firstDebugDone = true;
+                            var dC = document.createElement('canvas');
+                            dC.width = result.debugCanvas.width;
+                            dC.height = result.debugCanvas.height;
+                            var dctx = dC.getContext('2d');
+                            dctx.drawImage(result.debugCanvas, 0, 0);
+                            dctx.strokeStyle = 'red';
+                            dctx.lineWidth = 3;
+                            dctx.beginPath();
+                            dctx.moveTo(0, result.debugCropY + 0.5);
+                            dctx.lineTo(result.debugCanvas.width, result.debugCropY + 0.5);
+                            dctx.stroke();
+                            dctx.fillStyle = 'rgba(255,0,0,0.15)';
+                            dctx.fillRect(0, 0, result.debugCanvas.width, result.debugCropY);
+                            var dImg = document.createElement('img');
+                            dImg.src = dC.toDataURL('image/png');
+                            dImg.style.cssText = 'display:block;width:100%;height:auto;opacity:0.6;margin-bottom:2px;';
+                            dImg.alt = 'Debug: corte en y=' + result.debugCropY + ' (' + result.metodo + ')';
+                            contenidoPDF.appendChild(dImg);
+                        }
+
+                        var img = document.createElement('img');
+                        img.src = result.dataUrl;
+                        img.className = 'pagina-pdf';
+                        contenidoPDF.appendChild(img);
+                    }
 
                     processed++;
                     progressBar.style.width = ((processed / totalPages) * 100) + '%';
                 }
             } catch (err) {
                 console.error('Error con PDF:', pdfUrls[i], err);
-                var errEl = document.createElement('p');
-                errEl.style.cssText = 'color:red;padding:10px 20px;font-size:13px;';
-                errEl.textContent = 'Error al procesar: ' + pdfUrls[i];
-                contenidoPDF.appendChild(errEl);
+                if (mostrarPreview) {
+                    var errEl = document.createElement('p');
+                    errEl.style.cssText = 'color:red;padding:10px 20px;font-size:13px;';
+                    errEl.textContent = 'Error al procesar: ' + pdfUrls[i];
+                    contenidoPDF.appendChild(errEl);
+                }
             }
         }
 
         loadingEl.style.display = 'none';
         progressBar.style.width = '100%';
-        if (infoEl) {
+        if (mostrarPreview && infoEl) {
             var partes = [];
             if (refOk > 0) partes.push('Referencia: ' + refOk);
             if (blanOk > 0) partes.push('Blancos: ' + blanOk);
@@ -434,21 +454,16 @@ document.addEventListener('DOMContentLoaded', function () {
             infoEl.textContent = 'Páginas procesadas — ' + partes.join(' | ');
         }
 
-        /* ===== Extraer instrumental del primer PDF ===== */
-        if (pdfUrls.length > 0) {
-            try {
-                var instData = await extraerTablaPDF(pdfUrls[0]);
-                var instSection = document.getElementById('instrumental-section');
-                var instContainer = document.getElementById('instrumental-container');
-                if (instData.length > 0) {
-                    instContainer.innerHTML = generarTablaEditable(instData);
-                    instSection.style.display = 'block';
-                } else {
-                    instSection.style.display = 'none';
-                }
-            } catch (err) {
-                console.error('Error extrayendo instrumental:', err);
-            }
+        /* ===== Mostrar tabla instrumental ===== */
+        var instSection = document.getElementById('instrumental-section');
+        var instContainer = document.getElementById('instrumental-container');
+        if (instrumentalData && instrumentalData.length > 0) {
+            instContainer.innerHTML = generarTablaEditable(instrumentalData);
+            instSection.style.display = 'block';
+            console.log('[Instrumental] Tabla generada con ' + instrumentalData.length + ' secciones');
+        } else {
+            instSection.style.display = 'none';
+            console.log('[Instrumental] No se extrajeron datos');
         }
     });
 });
