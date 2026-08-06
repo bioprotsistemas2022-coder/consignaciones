@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['subir_pdf'])) {
     if ($archivo && $archivo['error'] === UPLOAD_ERR_OK) {
         $ext = strtolower(pathinfo($archivo['name'], PATHINFO_EXTENSION));
         if ($ext === 'pdf' && $carpeta !== '') {
-            $destino = rtrim(__DIR__, '\\/') . DIRECTORY_SEPARATOR . $carpeta . DIRECTORY_SEPARATOR . basename($archivo['name']);
+            $destino = rtrim(__DIR__, '\\/') . DIRECTORY_SEPARATOR . 'pdfs' . DIRECTORY_SEPARATOR . $carpeta . DIRECTORY_SEPARATOR . basename($archivo['name']);
             $dir = dirname($destino);
             if (!is_dir($dir)) mkdir($dir, 0777, true);
             if (is_dir($dir)) $ok = move_uploaded_file($archivo['tmp_name'], $destino);
@@ -27,10 +27,7 @@ $error = '';
 $cirugia = null;
 
 
-
-if ($plcCod <= 0) {
-    $error = 'Error: No se especificó el código de planilla (PlcCod).';
-} else {
+if ($plcCod > 0) {
     try {
         $stmt = $pdo->prepare('
             SELECT p.PlcCod, p.PlcFec, p.PlcPac, p.PlcMed, p.PlcSer,
@@ -80,6 +77,9 @@ if (isset($_GET['upload'])) {
 
     <div class="cabecera-form">
         <img class="logo" src="LOGO/logo_bioimplant.png" alt="Logo BIOPROT">
+        <div style="align-self:center;text-align:right;">
+            <a href="cajas_consignadas.php<?= $plcCod > 0 ? '?plc_cod=' . $plcCod : '' ?>" class="btn btn-secundario">Cajas consignadas (CX)</a>
+        </div>
     </div>
 
     <!-- ===== FORMULARIO SUBIR PDF (separado) ===== -->

@@ -15,10 +15,9 @@ $accion = trim($_POST['accion'] ?? '');
 $error = '';
 $mostrarPaso = 0;
 
-if ($plcCod <= 0) {
-    $error = 'Error: No se especificó el código de planilla (PlcCod).';
-} elseif (count($pdfs) === 0) {
+if (count($pdfs) === 0) {
     $error = 'Seleccione al menos un PDF.';
+    $mostrarPaso = 0;
 } else {
     $mostrarPaso = max(0, min(count($pdfs) - 1, $paso));
     // "Omitir" no guarda la caja actual, avanza directo a la siguiente.

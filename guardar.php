@@ -25,14 +25,19 @@ $error = '';
 $ncoCod = 0;
 $nombreActual = ($total > 0) ? extraerNombrePdf($pdfs[$paso]) : '';
 
-if ($plcCod <= 0) {
-    $error = 'Error: No se especificó el código de planilla (PlcCod).';
-} else {
-    try {
+try {
         $pdo->beginTransaction();
 
-        $stmt = $pdo->prepare('INSERT INTO notaconsignacion (NcoFec, NcoCac, NcoPlcCod, NcoHosDesc, NcoMed, NcoPac) VALUES (CURDATE(), 262, ?, ?, ?, ?)');
-        $stmt->execute([$plcCod, $institucion, $doctor, $paciente]);
+        // Validar la caja seleccionada contra el catálogo global de cajas
+        $ncoCac = (int)($_POST['nco_cac'] ?? 0);
+        if ($ncoCac > 0) {
+            $val = $pdo->prepare('SELECT COUNT(*) FROM cajacirugia WHERE CacCod = ?');
+            $val->execute([$ncoCac]);
+            if ((int)$val->fetchColumn() === 0) $ncoCac = 0;
+        }
+
+        $stmt = $pdo->prepare('INSERT INTO notaconsignacion (NcoFec, NcoCac, NcoPlcCod, NcoHosDesc, NcoMed, NcoPac) VALUES (CURDATE(), ?, ?, ?, ?, ?)');
+        $stmt->execute([$ncoCac, $plcCod, $institucion, $doctor, $paciente]);
         $ncoCod = (int)$pdo->lastInsertId();
 
         $stmtDet = $pdo->prepare('INSERT INTO notaconsignaciondetalle (NcoCod, NcoDetItm, NcoDetCan, NcoDetDsc, NcoDetChk) VALUES (?, ?, ?, ?, ?)');
@@ -46,12 +51,46 @@ if ($plcCod <= 0) {
             }
         }
 
+        // Implantes / materiales
+        $implArtId    = $_POST['impl_art_id']    ?? [];
+        $implArtMat   = $_POST['impl_art_mat_id'] ?? [];
+        $implGtin     = $_POST['impl_gtin']      ?? [];
+        $implDsc      = $_POST['impl_dsc']       ?? [];
+        $implCan      = $_POST['impl_can']       ?? [];
+        $implRep      = $_POST['impl_rep']       ?? [];
+        $implLot      = $_POST['impl_lot']       ?? [];
+        $implVen      = $_POST['impl_ven']       ?? [];
+        $implSer      = $_POST['impl_ser']       ?? [];
+        $implUbi      = $_POST['impl_ubi']       ?? [];
+
+        $stmtImpl = $pdo->prepare('INSERT INTO notaconsignacionimplante
+            (NcoCod, ImplItm, ArtId, ArtMatId, ArtMatGtin, ImplCan, ImplDsc, ImplLot, ImplVen, ImplSer, ImplRep, ImplUbiCod)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $iitm = 1;
+        foreach ($implArtId as $k => $artId) {
+            $artId = (int)$artId;
+            $artMatId = ($implArtMat[$k] ?? '') !== '' ? (int)$implArtMat[$k] : null;
+            $gtin = trim($implGtin[$k] ?? '');
+            $desc = trim($implDsc[$k] ?? '');
+            $can = (float)($implCan[$k] ?? 1);
+            $lote = trim($implLot[$k] ?? '');
+            $venRaw = trim($implVen[$k] ?? '');
+            $ven = ($venRaw !== '' && $venRaw !== '0000-00-00') ? $venRaw : null;
+            $ser = trim($implSer[$k] ?? '');
+            $rep = (!empty($implRep[$k])) ? 'S' : 'N';
+            $ubi = (int)($implUbi[$k] ?? 1);
+
+            if ($can <= 0) continue;
+
+            $stmtImpl->execute([$ncoCod, $iitm++, $artId, $artMatId, $gtin !== '' ? $gtin : null,
+                $can, $desc, $lote !== '' ? $lote : null, $ven, $ser !== '' ? $ser : null, $rep, $ubi]);
+        }
+
         $pdo->commit();
     } catch (Exception $e) {
         $pdo->rollBack();
         $error = 'Error de base de datos: ' . $e->getMessage();
     }
-}
 
 if ($ncoCod > 0) {
     $guardadas[] = [$nombreActual, $ncoCod];
@@ -61,7 +100,7 @@ if ($ncoCod > 0) {
 function e($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 
 $esUltima = ($paso >= $total - 1);
-$urlBack = 'index.php?PlcCod=' . $plcCod . ($usrCod !== '' ? '&UsrCod=' . urlencode($usrCod) : '');
+$urlBack = 'index.php' . ($plcCod > 0 ? '?PlcCod=' . $plcCod : '?') . ($usrCod !== '' ? ($plcCod > 0 ? '&' : '') . 'UsrCod=' . urlencode($usrCod) : '');
 ?>
 <!DOCTYPE html>
 <html lang="es">

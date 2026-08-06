@@ -12,6 +12,7 @@ if (count($ncos) === 0) {
 // Crear un array para almacenar todos los datos
 $allNotas = [];
 $allDetalles = [];
+$allImplantes = [];
 
 foreach ($ncos as $ncoCod) {
     $stmt = $pdo->prepare('SELECT * FROM notaconsignacion WHERE NcoCod = ?');
@@ -23,6 +24,17 @@ foreach ($ncos as $ncoCod) {
         $stmtDet = $pdo->prepare('SELECT NcoDetCan, NcoDetDsc, NcoDetChk FROM notaconsignaciondetalle WHERE NcoCod = ? ORDER BY NcoDetItm');
         $stmtDet->execute([$ncoCod]);
         $allDetalles[$ncoCod] = $stmtDet->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmtImpl = $pdo->prepare("
+            SELECT npi.ImplCan, npi.ImplLot, npi.ImplSer, npi.ImplRep,
+                   COALESCE(a.ArtDes, npi.ImplDsc, '') AS ImplDsc
+            FROM notaconsignacionimplante npi
+            LEFT JOIN articulos a ON a.ArtId = npi.ArtId
+            WHERE npi.NcoCod = ?
+            ORDER BY npi.ImplItm
+        ");
+        $stmtImpl->execute([$ncoCod]);
+        $allImplantes[$ncoCod] = $stmtImpl->fetchAll(PDO::FETCH_ASSOC);
     }
 }
 
@@ -46,6 +58,7 @@ foreach ($ncos as $ncoCod) {
     
     $nota = $allNotas[$ncoCod];
     $detalles = $allDetalles[$ncoCod];
+    $implantes = $allImplantes[$ncoCod] ?? [];
     
     $pdf->AddPage();
     
@@ -144,7 +157,42 @@ foreach ($ncos as $ncoCod) {
     $pdf->SetFont('Arial', 'I', 7);
     $pdf->Cell(0, 4, utf8_decode('Items chequeados: ' . $chkCount . ' de ' . count($detalles)), 0, 1, 'R');
     $pdf->Ln(10);
-    
+
+    // === MATERIALES / IMPLANTES ===
+    if (count($implantes) > 0) {
+        $pdf->SetFont('Arial', 'B', 11);
+        $pdf->Cell(0, 6, utf8_decode('MATERIALES / IMPLANTES'), 0, 1);
+        $pdf->Ln(3);
+
+        $hdr = ['Cant.', 'Descripción', 'Rep.'];
+        $w2 = [20, 145, 15];
+        $pdf->SetFont('Arial', 'B', 8);
+        $pdf->SetFillColor(26, 58, 92);
+        $pdf->SetTextColor(255, 255, 255);
+        for ($i = 0; $i < count($hdr); $i++) {
+            $pdf->Cell($w2[$i], 6, utf8_decode($hdr[$i]), 1, 0, 'C', true);
+        }
+        $pdf->Ln();
+        $pdf->SetTextColor(0, 0, 0);
+
+        $fill2 = false;
+        foreach ($implantes as $imp) {
+            $rep = $imp['ImplRep'] === 'S' ? 'S' : '';
+            $dsc = $imp['ImplDsc'];
+            if (!empty($imp['ImplLot'])) $dsc .= ' - Lote: ' . $imp['ImplLot'];
+            if (!empty($imp['ImplSer'])) $dsc .= ' - N°: ' . $imp['ImplSer'];
+            $pdf->SetFillColor($fill2 ? 235 : 255, $fill2 ? 235 : 255, $fill2 ? 235 : 255);
+            $pdf->SetFont('Arial', 'B', 8);
+            $pdf->Cell($w2[0], 5, $imp['ImplCan'], 1, 0, 'C', true);
+            $pdf->SetFont('Arial', '', 8);
+            $pdf->Cell($w2[1], 5, utf8_decode($dsc), 1, 0, 'L', true);
+            $pdf->Cell($w2[2], 5, utf8_decode($rep), 1, 0, 'C', true);
+            $pdf->Ln();
+            $fill2 = !$fill2;
+        }
+        $pdf->Ln(10);
+    }
+
     // === LINEA SEPARADORA ===
     $pdf->Line(15, $pdf->GetY(), 195, $pdf->GetY());
     $pdf->Ln(8);

@@ -15,7 +15,7 @@ $hosDesc = trim($data['institucion'] ?? '');
 $med = trim($data['doctor'] ?? '');
 $pac = trim($data['paciente'] ?? '');
 
-if ($plcCod <= 0 || empty($items)) {
+if (empty($items)) {
     echo json_encode(['ok' => false, 'error' => 'Código inválido o sin items']);
     exit;
 }
@@ -23,8 +23,16 @@ if ($plcCod <= 0 || empty($items)) {
 try {
     $pdo->beginTransaction();
 
-    $stmt = $pdo->prepare('INSERT INTO notaconsignacion (NcoFec, NcoCac, NcoPlcCod, NcoHosDesc, NcoMed, NcoPac) VALUES (CURDATE(), 262, ?, ?, ?, ?)');
-    $stmt->execute([$plcCod, $hosDesc, $med, $pac]);
+    // Validar la caja seleccionada contra el catálogo global de cajas
+    $ncoCac = (int)($data['cac_cod'] ?? 0);
+    if ($ncoCac > 0) {
+        $val = $pdo->prepare('SELECT COUNT(*) FROM cajacirugia WHERE CacCod = ?');
+        $val->execute([$ncoCac]);
+        if ((int)$val->fetchColumn() === 0) $ncoCac = 0;
+    }
+
+    $stmt = $pdo->prepare('INSERT INTO notaconsignacion (NcoFec, NcoCac, NcoPlcCod, NcoHosDesc, NcoMed, NcoPac) VALUES (CURDATE(), ?, ?, ?, ?, ?)');
+    $stmt->execute([$ncoCac, $plcCod, $hosDesc, $med, $pac]);
     $ncoCod = $pdo->lastInsertId();
 
     $stmtDet = $pdo->prepare('INSERT INTO notaconsignaciondetalle (NcoCod, NcoDetItm, NcoDetCan, NcoDetDsc, NcoDetChk) VALUES (?, ?, ?, ?, ?)');
